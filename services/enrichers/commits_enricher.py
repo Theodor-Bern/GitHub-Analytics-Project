@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Commits enricher: subscribes to `repos.raw`, counts total commits per repo
-via GitHub's commits API, and republishes to `commit-topic`.
 
-Uses the Link-header trick: GET /commits?per_page=1 puts the total commit
-count as the page number of rel="last" — one API call regardless of size.
-"""
 import os
 import re
 import json
