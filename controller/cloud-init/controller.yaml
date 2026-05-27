@@ -1,7 +1,5 @@
 #cloud-config
-# Controller VM — installs Docker and pulls the de2-controller image.
-# The teacher's SSH key, openrc.sh, and GitHub tokens are SCP'd in by hand
-# after the VM is up (they are secrets and must not live in cloud-init).
+#installs Docker and pulls the controller image.
 
 package_update: true
 package_upgrade: false
