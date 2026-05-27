@@ -1,30 +1,21 @@
 #!/usr/bin/env bash
-# collect.sh — snapshot logs and results from the aggregator VM.
-#
-# Run AFTER deploy.sh. Repeatable: each call writes a fresh timestamped
-# snapshot under /results/ inside the container.
 
 set -euo pipefail
 
-SSH_KEY="${SSH_KEY:?SSH_KEY env var must point to the mounted private key (see README)}"
+SSH_KEY="${SSH_KEY:?set SSH_KEY}"
 SSH_USER="${SSH_USER:-ubuntu}"
 SSH_OPTS=(-i "$SSH_KEY"
           -o StrictHostKeyChecking=no
           -o UserKnownHostsFile=/dev/null
           -o LogLevel=ERROR)
-
 INVENTORY="${INVENTORY:-/controller/state/inventory.env}"
 RESULTS_DIR="${RESULTS_DIR:-/results}"
 
-log()  { echo -e "\033[1;34m[collect]\033[0m $*"; }
-die()  { echo -e "\033[1;31m[collect]\033[0m $*"; exit 1; }
+[[ -f "$SSH_KEY" ]]   || { echo "missingt $SSH_KEY"; exit 1; }
+[[ -f "$INVENTORY" ]] || { echo "no ip inventory, run deploy.sh first"; exit 1; }
 
-[[ -f "$SSH_KEY" ]]   || die "SSH key not found at $SSH_KEY"
-[[ -f "$INVENTORY" ]] || die "Inventory not found at $INVENTORY — has deploy.sh run?"
-
-# shellcheck disable=SC1090
 source "$INVENTORY"
-[[ -n "${AGGREGATOR_IP:-}" ]] || die "AGGREGATOR_IP missing from inventory"
+[[ -n "${AGGREGATOR_IP:-}" ]] || { echo "AGGREGATOR_IP missing from inventory"; exit 1; }
 
 mkdir -p "$RESULTS_DIR"
 timestamp=$(date +"%Y%m%d-%H%M%S")
@@ -41,14 +32,13 @@ containers=(
 
 for c in "${containers[@]}"; do
     out="$snapshot_dir/$c.log"
-    log "  fetching $c → $out"
+    echo "fetching $c"
     ssh "${SSH_OPTS[@]}" "$SSH_USER@$AGGREGATOR_IP" \
-        "sudo docker logs $c 2>&1" > "$out" || {
-        log "    (warning) failed to fetch $c"
-    }
+        "sudo docker logs $c 2>&1" > "$out" \
+        || echo "failed: $c"
 done
 
-# Extract the last "── Top N ──" block from each log into a quick-look summary.
+# Extract last N blocks
 summary="$snapshot_dir/SUMMARY.txt"
 {
     echo "Snapshot $timestamp"
@@ -63,15 +53,12 @@ summary="$snapshot_dir/SUMMARY.txt"
     done
 } > "$summary"
 
-log "Fetching JSON result files..."
-
 json_files=(
     "results_q1.json"
     "results_q2.json"
     "results_q3.json"
     "results_q4.json"
 )
-
 for f in "${json_files[@]}"; do
     out="$snapshot_dir/$f"
     log "  fetching $f → $out"
@@ -81,8 +68,7 @@ for f in "${json_files[@]}"; do
     }
 done
 
-log "Merging JSON files into results.json..."
-
+log "Merging JSON files into results.json"
 python3 - <<PYEOF
 import json, os
 
@@ -113,7 +99,6 @@ print(f"  results.json written to {out_path}")
 PYEOF
 
 if [[ -f "$snapshot_dir/results.json" ]]; then
-    log "Generating plots..."
     RESULTS_FILE="$snapshot_dir/results.json" \
     FIGURES_DIR="$snapshot_dir/figures" \
     python3 /controller/plot.py && log "Plots saved to $snapshot_dir/figures/"
