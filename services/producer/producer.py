@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Producer: paginates GitHub's Search API one day at a time and publishes
-each repo to the `repos.raw` Pulsar topic. After every publish, blocks
-until DONE events arrive on the control topic from all three downstream
-stages (language, commits, tests).
-"""
+
 import os
 import sys
 import json
