@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test enricher: subscribes to `repos.raw`, fetches each repo's file tree,
-classifies whether it contains unit tests and/or CI configuration, and
-publishes to `test-topic` (tests) and `test-and-ci-topic` (tests + CI).
-"""
+
 import os
 import re
 import json
