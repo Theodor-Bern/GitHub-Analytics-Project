@@ -1,0 +1,31 @@
+#cloud-config
+# Broker VM — runs Apache Pulsar in standalone mode.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - netcat-openbsd
+
+runcmd:
+  - chown -R ubuntu:ubuntu /home/ubuntu
+
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker ubuntu
+  - systemctl enable --now docker
+  - docker pull apachepulsar/pulsar:3.2.0
+  - touch /home/ubuntu/.cloud-init-done
+  - chown ubuntu:ubuntu /home/ubuntu/.cloud-init-done
+
+final_message: "Broker VM provisioned."

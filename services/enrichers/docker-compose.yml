@@ -1,0 +1,31 @@
+services:
+  commits-enricher:
+    image: theodorafc02/de-2-enrichers:latest
+    container_name: commits-enricher
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      # Includes TOKEN_1 as a guaranteed-present fallback. TokenPool drops
+      # empty entries and deduplicates, so 1–5 distinct tokens all work.
+      GITHUB_TOKENS: "${GITHUB_TOKEN_2},${GITHUB_TOKEN_4},${GITHUB_TOKEN_1}"
+      INPUT_TOPIC:  "repos.raw"
+      OUTPUT_TOPIC: "commit-topic"
+      SUBSCRIPTION: "commits-enricher-sub"
+      LOG_EVERY:    "50"
+    command: python commits_enricher.py
+    restart: unless-stopped
+
+  test-enricher:
+    image: theodorafc02/de-2-enrichers:latest
+    container_name: test-enricher
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      GITHUB_TOKENS:     "${GITHUB_TOKEN_3},${GITHUB_TOKEN_5},${GITHUB_TOKEN_1}"
+      INPUT_TOPIC:       "repos.raw"
+      TEST_TOPIC:        "test-topic"
+      TEST_AND_CI_TOPIC: "test-and-ci-topic"
+      SUBSCRIPTION:      "test-enricher-sub"
+      LOG_EVERY:         "50"
+    command: python test_enricher.py
+    restart: unless-stopped

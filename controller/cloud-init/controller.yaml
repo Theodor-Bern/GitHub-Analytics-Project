@@ -1,0 +1,38 @@
+#cloud-config
+# Controller VM — installs Docker and pulls the de2-controller image.
+# The teacher's SSH key, openrc.sh, and GitHub tokens are SCP'd in by hand
+# after the VM is up (they are secrets and must not live in cloud-init).
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+
+runcmd:
+  - chown -R ubuntu:ubuntu /home/ubuntu
+
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker ubuntu
+  - systemctl enable --now docker
+
+  - docker pull theodorafc02/de2-controller:latest
+
+  # Clone the repo so the teacher has run.sh and .env.example ready to edit.
+  - sudo -u ubuntu git clone https://github.com/Theodor-Bern/DE-II-Project.git /home/ubuntu/de2
+
+  - touch /home/ubuntu/.cloud-init-done
+  - chown ubuntu:ubuntu /home/ubuntu/.cloud-init-done
+
+final_message: "Controller VM ready"

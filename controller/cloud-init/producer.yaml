@@ -1,0 +1,57 @@
+#cloud-config
+# Producer VM — installs Docker, pulls the producer image, writes BROKER_IP
+# to env. Compose file and tokens are SCP'd in by deploy.sh after boot.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - netcat-openbsd
+
+write_files:
+  - path: /etc/profile.d/broker.sh
+    permissions: '0755'
+    content: |
+      export BROKER_IP={{BROKER_IP}}
+      export PULSAR_URL=pulsar://{{BROKER_IP}}:6650
+
+  - path: /home/ubuntu/.broker_env
+    permissions: '0644'
+    content: |
+      BROKER_IP={{BROKER_IP}}
+      PULSAR_URL=pulsar://{{BROKER_IP}}:6650
+
+runcmd:
+  - chown -R ubuntu:ubuntu /home/ubuntu
+
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker ubuntu
+  - systemctl enable --now docker
+
+  - docker pull theodorafc02/de-2-producer:latest
+
+  - |
+    echo "Waiting for broker at {{BROKER_IP}}:6650..."
+    for i in $(seq 1 60); do
+      if nc -z {{BROKER_IP}} 6650; then
+        echo "Broker reachable after ${i} attempts"
+        break
+      fi
+      sleep 5
+    done
+
+  - touch /home/ubuntu/.cloud-init-done
+  - chown ubuntu:ubuntu /home/ubuntu/.cloud-init-done
+
+final_message: "Producer VM provisioned. Broker at {{BROKER_IP}}:6650."

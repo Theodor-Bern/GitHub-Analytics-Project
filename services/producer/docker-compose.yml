@@ -1,0 +1,13 @@
+services:
+  producer:
+    image: theodorafc02/de-2-producer:latest
+    container_name: producer
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      GITHUB_TOKEN: "${GITHUB_TOKEN_1}"
+      DAYS_BACK: "${DAYS_BACK:-365}"
+      DONE_TIMEOUT_SECONDS: "5400"
+      TOPIC: "repos.raw"
+    # Runs once over the date range, then exits — don't auto-restart.
+    restart: "no"

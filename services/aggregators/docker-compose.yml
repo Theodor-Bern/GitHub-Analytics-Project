@@ -1,0 +1,64 @@
+services:
+  language-aggregator:
+    image: theodorafc02/de-2-aggregators:latest
+    container_name: language-aggregator
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      TOPIC:        "repos.raw"
+      SUBSCRIPTION: "language-aggregator-sub"
+      TOP_N:        "10"
+      REPORT_EVERY: "100"
+      RESULTS_FILE: "/results/results_q1.json"
+    volumes:
+      - /home/ubuntu/aggregator:/results
+    command: python language_aggregator.py
+    restart: unless-stopped
+
+  commit-aggregator:
+    image: theodorafc02/de-2-aggregators:latest
+    container_name: commit-aggregator
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      TOPIC:        "commit-topic"
+      SUBSCRIPTION: "commit-aggregator-sub"
+      TOP_N:        "10"
+      REPORT_EVERY: "50"
+      RESULTS_FILE: "/results/results_q2.json"
+    volumes:
+      - /home/ubuntu/aggregator:/results
+    command: python commit_aggregator.py
+    restart: unless-stopped
+
+  test-aggregator:
+    image: theodorafc02/de-2-aggregators:latest
+    container_name: test-aggregator
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      TOPIC:        "test-topic"
+      SUBSCRIPTION: "test-aggregator-sub"
+      TOP_N:        "10"
+      REPORT_EVERY: "50"
+      RESULTS_FILE: "/results/results_q3.json"
+    volumes:
+      - /home/ubuntu/aggregator:/results
+    command: python test_aggregator.py
+    restart: unless-stopped
+
+  ci-aggregator:
+    image: theodorafc02/de-2-aggregators:latest
+    container_name: ci-aggregator
+    env_file:
+      - /home/ubuntu/.broker_env
+    environment:
+      TOPIC:        "test-and-ci-topic"
+      SUBSCRIPTION: "ci-aggregator-sub"
+      TOP_N:        "10"
+      REPORT_EVERY: "25"
+      RESULTS_FILE: "/results/results_q4.json"
+    volumes:
+      - /home/ubuntu/aggregator:/results
+    command: python ci_aggregator.py
+    restart: unless-stopped
