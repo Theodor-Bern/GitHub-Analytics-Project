@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""
-TokenPool: rotate over a list of GitHub PATs to multiply the rate-limit
-budget. The pool tracks each token's remaining quota from response headers,
-rotates when low, and sleeps until reset when all tokens are spent.
 
-Designed to be process-local — distinct enricher processes own disjoint
-sets of tokens, so there's no shared state.
-"""
 import time
 import requests
 
