@@ -1,87 +1,54 @@
-# DE-II Project — Course 1TD076
-
+#DE-II project
 A distributed pipeline over Apache Pulsar that ingests recent GitHub repositories,
 enriches each one with commit counts and test/CI signals, and answers four
 research questions:
 
-- **Q1** Top programming languages by project count
-- **Q2** Most frequently updated projects (by commit count)
-- **Q3** Top languages following test-driven development
-- **Q4** Top languages following TDD + DevOps (tests + CI)
 
-## Architecture
+We use a total of 5 VMs. 
 
-```
-GitHub API ──► Producer ──► Pulsar broker ──┬─► Language aggregator   (Q1)
-                                            ├─► Commits enricher  ──► Commit aggregator (Q2)
-                                            └─► Test enricher     ──► Test aggregator   (Q3)
-                                                                  └─► CI aggregator     (Q4)
-```
+We use a controller VM that starts 4 worker VMs automatically via Openstack API.
 
-Five VMs are provisioned on UPPMAX OpenStack:
+Here is a step-to-step guide which shows how to set up the architecture correctly.
 
-| Role | Containers | Purpose |
-|---|---|---|
-| **Controller VM** | de2-controller | Orchestrates provisioning and deployment of the 4 worker VMs |
-| Broker | Apache Pulsar | Message bus for the pipeline |
-| Producer | producer | Fetches repos from GitHub Search API |
-| Consumer | commits-enricher, test-enricher | Enrich repos with commit counts and test/CI signals |
-| Aggregator | language-, commit-, test-, ci-aggregator | Produce Q1–Q4 answers |
-
-The controller VM is created manually once. It then provisions the 4 worker VMs
-automatically via OpenStack's Nova API.
-
-## Prerequisites
-
-On your local machine:
-- An SSH client
-- A web browser to access UPPMAX Horizon and GitHub
-
-You will need:
-- An OpenStack project on UPPMAX with quota for 5 `ssc.medium` VMs
-- A GitHub account (1 personal access token is enough for a small demo)
 
 ## Setup
 
-### 1. Generate an SSH keypair (on your laptop)
+### 1. Start the controller VM on Openstack
+Launch a small flavoured VM by pasting the cloud-init script in the Configuration step on Openstack: controller.yaml. The script is located in the /controller/cloud-init/controller.yaml:
+
+   ```
+   https://raw.githubusercontent.com/Theodor-Bern/DE-II-Project/main/controller/cloud-init/control$
+   ```
+Cloud-init runs in the background for about ~5 minutes. Don't ssh in yet.
+
+### 2. SSH in to controller VM
+
+### 3. Generate ssh key on controller VM
+
+In order to launch the cluster, it is needed to generate the key. IMPORTANT: name the key: de2-key!
 
 ```bash
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/de2-key -N ""
 chmod 600 ~/.ssh/de2-key
 ```
 
-This creates two files in `~/.ssh/`:
-- `de2-key`     — private key (keep secret, used on your laptop and on the controller VM)
-- `de2-key.pub` — public key (uploaded to OpenStack in the next step)
 
-### 2. Upload the public key to OpenStack
-
+###4. Upload the public key to Openstack
 In Horizon:
 1. **Compute → Key Pairs → Import Public Key**
 2. Paste the contents of `~/.ssh/de2-key.pub`
-3. Name it `de2-key` (or any name — remember it for `.env` later)
+3. Name the key, remember the name for later steps.
 
-### 3. Download your OpenStack RC file
 
-In Horizon:
-1. **API Access → Download OpenStack RC File (v3)**
-2. Save it as `~/openrc.sh` on your laptop
+###5 Download your Openstack RC file.
+1. Paste the content of your RC file into a file called ~/openrc.sh
 
-### 4. Create at least one GitHub Personal Access Token
-
-On github.com:
-1. **Settings → Developer settings → Personal access tokens → Tokens (classic)**
-2. **Generate new token** with scopes: `public_repo`, `read:org`
-3. Save it on your laptop as `~/.github_tokens`, one token per line:
-
-   ```
-   GITHUB_TOKEN_1=ghp_xxxxxxxxxxxx
-   ```
-
-   For higher throughput, add up to four more tokens (preferably from different
-   GitHub accounts — tokens from the same account share the same 5000 req/h budget):
-
-   ```
+###6 Create a Github PAT
+1. Go to Github and then go to settings->Developer settings-> Personal access tokens -> Tokens (classic)
+2. Generate new token with scopes: puplic_repo, read:org
+3. Go to your controller VM. Use nano to create the file `~/.github_tokens
+4. Name one token per line: 
+ ```
    GITHUB_TOKEN_1=ghp_xxxxxxxxxxxx
    GITHUB_TOKEN_2=ghp_xxxxxxxxxxxx   # optional
    GITHUB_TOKEN_3=ghp_xxxxxxxxxxxx   # optional
@@ -89,70 +56,10 @@ On github.com:
    GITHUB_TOKEN_5=ghp_xxxxxxxxxxxx   # optional
    ```
 
-4. Lock down permissions:
-   ```bash
-   chmod 600 ~/.github_tokens
-   ```
+NOTE: YOU NEED TO NAME IT AS GITHUB_TOKEN_N OTHERWISE IT WILL NOT WORK
 
-### 5. Create the controller VM
-
-The controller VM is created manually in Horizon. Its cloud-init script
-installs Docker, pulls the controller image, and clones this repo automatically.
-
-1. Get the cloud-init yaml. Open this URL in your browser, select all, copy:
-
-   ```
-   https://raw.githubusercontent.com/Theodor-Bern/DE-II-Project/main/controller/cloud-init/controller.yaml
-   ```
-
-2. In Horizon: **Compute → Instances → Launch Instance**
-   - **Source:** Ubuntu 22.04
-   - **Flavor:** `ssc.small` (controller does no heavy compute)
-   - **Networks:** UPPMAX private network
-   - **Key Pair:** select `de2-key` (uploaded in step 2)
-   - **Configuration → Customization Script:** paste the cloud-init yaml from step 1
-   - **Launch Instance**
-
-3. Wait until the instance is **Active** and has a private IP. Note the IP.
-
-4. Cloud-init then runs in the background for ~5 minutes (Docker install,
-   image pull, git clone). Don't SSH in yet.
-
-### 6. SSH into the controller VM
-
-```bash
-ssh -i ~/.ssh/de2-key ubuntu@<controller-ip>
-```
-
-Wait until cloud-init is done before continuing:
-
-```bash
-ls /home/ubuntu/.cloud-init-done   # must exist
-ls /home/ubuntu/de2                # repo must be cloned
-docker images                      # de2-controller image must be listed
-```
-
-If `.cloud-init-done` is missing, wait a few more minutes and re-check.
-
-### 7. Copy your credentials to the controller VM
-
-From a **second terminal on your laptop** (keep the SSH session open):
-
-```bash
-scp -i ~/.ssh/de2-key ~/openrc.sh      ubuntu@<controller-ip>:~/openrc.sh
-scp -i ~/.ssh/de2-key ~/.github_tokens ubuntu@<controller-ip>:~/.github_tokens
-scp -i ~/.ssh/de2-key ~/.ssh/de2-key   ubuntu@<controller-ip>:~/.ssh/de2-key
-```
-
-The third line copies your **private key** to the controller — it needs it to
-SSH onward to the 4 worker VMs.
-
-Back in your SSH session on the controller VM, lock permissions:
-```bash
-chmod 600 ~/.ssh/de2-key ~/.github_tokens
-```
-
-### 8. Configure paths
+###7. Configure paths:
+## 8. Configure paths
 
 On the controller VM:
 
@@ -209,26 +116,8 @@ controller VM:
 
 This snapshots everything under `~/de2/results/snapshot-<timestamp>/`:
 
-| File | Contents |
-|---|---|
-| `results.json` | Merged Q1–Q4 answers |
-| `results_q1.json` … `results_q4.json` | Per-question raw answers |
-| `*.log` | Per-aggregator container logs |
-| `SUMMARY.txt` | Latest top-N from each aggregator's log |
-| `figures/*.pdf` | Bar charts for Q1–Q4 |
-
-You can run `./run.sh collect` repeatedly — each call writes a new snapshot
+You can run `./run.sh collect` repeatedly, each call writes a new snapshot
 with the latest numbers.
-
-## Get results onto your laptop
-
-From your laptop:
-
-```bash
-scp -i ~/.ssh/de2-key -r ubuntu@<controller-ip>:~/de2/results/ ./
-```
-
-## Tear down
 
 The 5 VMs persist until you delete them manually:
 
@@ -237,37 +126,3 @@ The 5 VMs persist until you delete them manually:
    aggregator-vm-*)
 3. **Actions → Delete Instances**
 
-## Configuration reference
-
-All overridable in `.env`:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `SSH_KEY_PATH` | — (required) | Private SSH key for the worker VMs |
-| `OPENSTACK_KEY_NAME` | — (required) | Name of the keypair in Horizon |
-| `OPENRC_PATH` | — (required) | OpenStack RC file |
-| `GITHUB_TOKENS_PATH` | — (required) | Tokens file (≥1 token) |
-| `DAYS_BACK` | `7` | Days of GitHub history to scan |
-
-## Troubleshooting
-
-**"SSH key has wrong permissions"** → `chmod 600 ~/.ssh/de2-key` on both your
-laptop and the controller VM.
-
-**`.cloud-init-done` never appears** → Check cloud-init logs on the VM:
-`sudo cat /var/log/cloud-init-output.log`. Most common issue: the Docker
-apt repo was temporarily unreachable. Re-launch the VM.
-
-**"Broker never came up"** → check UPPMAX quota; ssc.medium VMs sometimes
-take several minutes to boot. Delete the worker VMs in Horizon and run
-`./run.sh deploy` again.
-
-**"GitHub rate limit exceeded"** → wait for the reset window (the token pool
-handles this automatically). For a faster demo, reduce `DAYS_BACK` in `.env`.
-
-**"Inventory not found"** → `start_instances.py` failed before writing the
-inventory file. Check the deploy log for OpenStack API errors (most likely
-wrong password or quota exceeded).
-
-**Want to reset?** Delete the worker VMs in Horizon and `rm -rf state/`
-before running `./run.sh deploy` again. The controller VM can be reused.
